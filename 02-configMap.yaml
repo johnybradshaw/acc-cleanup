@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: linode-volume-cleanup-config
+  namespace: acc-cleanup
+data:
+  dry-run: "false"

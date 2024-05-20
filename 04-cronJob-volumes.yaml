@@ -1,0 +1,53 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: linode-volume-cleanup
+  namespace: acc-cleanup
+spec:
+  schedule: "0 0 * * *"  # Run once a day at midnight
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          securityContext: 
+            runAsNonRoot: true # Do not run as root
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+            allowPrivilegeEscalation: false # Do not allow privilege escalation
+            seccompProfile:
+              type: RuntimeDefault # Use default seccomp profile
+          containers:
+          - name: linode-volume-cleanup
+            image: ghcr.io/johnybradshaw/acc-cleanup:latest  # Use the official Linode CLI image
+            imagePullPolicy: Always # Always pull the latest image
+            resources: # Set resource limits
+              limits:
+                memory: 128Mi
+                cpu: 500m
+              requests:
+                memory: 128Mi
+                cpu: 500m
+            securityContext:
+              runAsNonRoot: true # Do not run as root
+              runAsUser: 10000
+              runAsGroup: 1000
+              allowPrivilegeEscalation: false # Do not allow privilege escalation
+              readOnlyRootFilesystem: true # Do not allow writes to root
+              capabilities:
+                drop: ["ALL"] # Drop all capabilities
+            env:
+            - name: LINODE_CLI_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: linode-api-key
+                  key: api-key
+            - name: DRY_RUN
+              valueFrom:
+                configMapKeyRef:
+                  name: linode-volume-cleanup-config
+                  key: dry-run
+            args:
+            - |
+                volumes list --json | jq -r '.[] | select(.linode_id == null) | .id' | xargs -I {} sh -c 'echo "Deleting volume: {}"; linode-cli volumes delete {}'
+          restartPolicy: OnFailure
